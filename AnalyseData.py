@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
+import numpy as np
 
 # For each key (corresponding to the month number), the associated season is given
 SeasonDict={1: "Winter", 2:"Winter", 3:"Spring", 4:"Spring", 5:"Spring", 6:"Summer", 7:"Summer", 8:"Summer", 9:"Autumn", 10:"Autumn", 11:"Autumn", 12:"Winter"}
@@ -131,8 +132,12 @@ def djuCalculation(dfDailyExt, path2SaveResults, djuBelow = True, refValue = 18,
         # Sum all DJU and group results by years
         DJtot = DJ1.resample("AS").sum().add(DJ2.resample("AS").sum())
         
+        # When no data for one year, set values to nan
+        df_filter_nan = dailyMin.isna() & dailyMax.isna()
+        result = df_set_nan(DJtot, dfDailyExt.mean(axis = 1, level = 0), df_filter_nan, freq = "AS", nb_nan = 2)
+        
         if save:
-            DJtot.to_csv(path2SaveResults+"heating.csv")
+            result.to_csv(path2SaveResults+"heating.csv")
             
     # For cooling days calculation   
     elif not djuBelow:
@@ -147,10 +152,14 @@ def djuCalculation(dfDailyExt, path2SaveResults, djuBelow = True, refValue = 18,
         # Sum all DJU and group results by years
         DJtot = DJ1.resample("AS").sum().add(DJ2.resample("AS").sum())
     
+        # When no data for one year, set values to nan
+        df_filter_nan = dailyMin.isna() | dailyMax.isna()
+        result = df_set_nan(DJtot, dfDailyExt.mean(axis = 1, level = 0), df_filter_nan, freq = "AS", nb_nan = 2)
+        
         if save:
-            DJtot.to_csv(path2SaveResults+"cooling.csv")
+            result.to_csv(path2SaveResults+"cooling.csv")
     
-    return DJtot
+    return result
 
 
 def nbHeatWaveDays(dfDailyExt, path2SaveResults, thresholdDuration = 1, 
@@ -191,15 +200,60 @@ def nbHeatWaveDays(dfDailyExt, path2SaveResults, thresholdDuration = 1,
 			results : pd.DataFrame
                 DataFrame containing the number of heatwave day for each year
                 and each station (column of the initial data)"""
+    # Identify the days respecting the two threshold temperature
     df_selection = (dfDailyExt.xs("MIN", axis = 1, level = 1) > thresholdNight) &\
                     (dfDailyExt.xs("MAX", axis = 1, level = 1) > thresholdDay)
     df_buff = df_selection.copy()
+    # Identify consecutive days respecting the two threshold temperature
     for i in range(1, thresholdDuration+1):
         df_buff = df_buff.multiply(df_selection.shift(1))
+      
+    # Calculates the total number of consecutive heat wave days per year 
+    # (setting 0 for years where no data exist...)
+    result_without_nan = df_buff.resample("AS").sum()
     
-    result = df_buff.sum()
+    # Reset nan values that have been lost with the previous analysis
+    df_filter_nan = (dfDailyExt.xs("MIN", axis = 1, level = 1).isna()) |\
+                (dfDailyExt.xs("MAX", axis = 1, level = 1).isna())
+    result = df_set_nan(result_without_nan, df_buff, df_filter_nan, freq = "AS", nb_nan = 2)
     
     if save:
         result.to_csv(path2SaveResults+"nb_heat_wave_days.csv")
     
     return result
+
+def df_set_nan(result_without_nan, df_initial, df_nan_to_filter, freq = "AS", nb_nan = 2):
+    """ The resample function does not get rid of nan neither the potential filtering induced
+    by threshold comparison. Thus the results may display a value for certain year / month
+    while there is no data for this year / month. Thus this function set the result
+    year / month to nan when needed
+    
+	Parameters
+	_ _ _ _ _ _ _ _ _ _ 
+
+			result_without_nan : DataFrame
+				The result without any nan while it should contain
+            df_initial : DataFrame
+                The raw data before the resampling
+            df_nan_to_filter : DataFrame
+                The raw data with each value replaced by a boolean (True when nan)
+            thresholdDay : "String", default "10-01"
+                Temperature used as threshold for day-time (maximum temperature)
+            freq : pd.offsets, "AS"
+                Offsets corresponding to the resampling
+            nb_nan : integer, default 2
+                The minimum number of nan to consider that a month (or year) should be
+                set to nan
+
+	Returns 
+	_ _ _ _ _ _ _ _ _ _ 
+
+			results : pd.DataFrame
+                DataFrame containing the results with values set to nan"""
+    df_initial[df_nan_to_filter] = np.nan
+    g = {c: df_initial[c].groupby(pd.Grouper(freq = freq)) for c in df_initial.columns}
+    under_two_nan = pd.concat({c: g[c].apply(lambda x: pd.isnull(x).sum()) >= nb_nan
+                     for c in g.keys()}, axis = 1)
+    result_without_nan[under_two_nan] = np.nan
+    
+    return result_without_nan
