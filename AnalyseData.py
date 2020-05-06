@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
+import matplotlib.pylab as plt
 
 # For each key (corresponding to the month number), the associated season is given
 SeasonDict={1: "Winter", 2:"Winter", 3:"Spring", 4:"Spring", 5:"Spring", 6:"Summer", 7:"Summer", 8:"Summer", 9:"Autumn", 10:"Autumn", 11:"Autumn", 12:"Winter"}
@@ -44,9 +45,9 @@ def dailyExtremum(df2study, path2SaveResults, save = False):
     return results
 
 
-def djuCalculation(dfDailyExt, path2SaveResults, djuBelow = True, refValue = 18, 
+def djuCalculation(dfDailyExt, path2SaveFiles, path2SaveFigures, djuBelow = True, refValue = 18, 
                    djuStart = "10-01", djuEnd = "05-20",
-                   save = True):
+                   saveFile = True, saveFigure = True):
     """Calculates for each year of the dataset the degree-day number according
     to the Météo-France definition (2005). For more information about the 
     implementation, cf. Bernard (2017). Note that the period for calculation 
@@ -84,10 +85,14 @@ def djuCalculation(dfDailyExt, path2SaveResults, djuBelow = True, refValue = 18,
             djuEnd : "String", default "05-20"
                 Month and day used as the end of the period of calculation of the degree-days
                 (month and day should be separated by '-')
-            path2SaveResults : string
-                Name of the URL where to save the resulting DataFrame if 'save' = True
-            save : boolean, default True
+            path2SaveFiles : string
+                Name of the URL where to save the resulting DataFrame if 'saveFile' = True
+            path2SaveFigures : string
+                Name of the URL where to save the resulting Figure if 'saveFigure' = True
+            saveFile : boolean, default True
                 Whether or not the results should be saved in a file
+            saveFigure : boolean, default True
+                Whether or not thefigure should be saved
 
 	Returns 
 	_ _ _ _ _ _ _ _ _ _ 
@@ -136,8 +141,15 @@ def djuCalculation(dfDailyExt, path2SaveResults, djuBelow = True, refValue = 18,
         df_filter_nan = dailyMin.isna() & dailyMax.isna()
         result = df_set_nan(DJtot, dfDailyExt.mean(axis = 1, level = 0), df_filter_nan, freq = "AS", nb_nan = 2)
         
-        if save:
-            result.to_csv(path2SaveResults+"heating.csv")
+        # Plot the results
+        fig = plt.figure()
+        result.boxplot(fontsize = 10, rot = 45)
+        
+        if saveFile:
+            result.to_csv(path2SaveFiles+"heating.csv")
+            
+        if saveFigure:
+            fig.savefig(path2SaveFigures+"DJU_heating.png")
             
     # For cooling days calculation   
     elif not djuBelow:
@@ -156,14 +168,21 @@ def djuCalculation(dfDailyExt, path2SaveResults, djuBelow = True, refValue = 18,
         df_filter_nan = dailyMin.isna() | dailyMax.isna()
         result = df_set_nan(DJtot, dfDailyExt.mean(axis = 1, level = 0), df_filter_nan, freq = "AS", nb_nan = 2)
         
-        if save:
-            result.to_csv(path2SaveResults+"cooling.csv")
-    
+        # Plot the results
+        fig = plt.figure()
+        result.boxplot(fontsize = 10, rot = 45)
+        
+        if saveFile:
+            result.to_csv(path2SaveFiles+"cooling.csv")
+                
+        if saveFigure:
+            fig.savefig(path2SaveFigures+"DJU_cooling.png")
+            
     return result
 
 
-def nbHeatWaveDays(dfDailyExt, path2SaveResults, thresholdDuration = 1, 
-                   thresholdNight = 20, thresholdDay = 34, save = True):
+def nbHeatWaveDays(dfDailyExt, path2SaveFiles, path2SaveFigures, thresholdDuration = 1, 
+                   thresholdNight = 20, thresholdDay = 34, saveFile = True, saveFigure = True):
     """Calculates the number of heat way days. A heat wave day is counted
     under two conditions:
         - daily temperature condition: each of the minimum and maximum temperature
@@ -189,10 +208,14 @@ def nbHeatWaveDays(dfDailyExt, path2SaveResults, thresholdDuration = 1,
                 Temperature used as threshold for night-time (minimum temperature)
             thresholdDay : "String", default "10-01"
                 Temperature used as threshold for day-time (maximum temperature)
-            path2SaveResults : string
-                Name of the URL where to save the resulting DataFrame if 'save' = True
-            save : boolean, default True
+            path2SaveFiles : string
+                Name of the URL where to save the resulting DataFrame if 'saveFile' = True
+            path2SaveFigures : string
+                Name of the URL where to save the resulting Figure if 'saveFigure' = True
+            saveFile : boolean, default True
                 Whether or not the results should be saved in a file
+            saveFigure : boolean, default True
+                Whether or not thefigure should be saved
 
 	Returns 
 	_ _ _ _ _ _ _ _ _ _ 
@@ -217,8 +240,15 @@ def nbHeatWaveDays(dfDailyExt, path2SaveResults, thresholdDuration = 1,
                 (dfDailyExt.xs("MAX", axis = 1, level = 1).isna())
     result = df_set_nan(result_without_nan, df_buff, df_filter_nan, freq = "AS", nb_nan = 2)
     
-    if save:
-        result.to_csv(path2SaveResults+"nb_heat_wave_days.csv")
+    # Display figure
+    fig = plt.figure()
+    result.boxplot(fontsize = 10, rot = 45)
+    
+    if saveFile:
+        result.to_csv(path2SaveFiles+"nb_heat_wave_days.csv")
+    
+    if saveFigure:
+        fig.savefig(path2SaveFigures+"nb_heat_wave_days.csv")
     
     return result
 
